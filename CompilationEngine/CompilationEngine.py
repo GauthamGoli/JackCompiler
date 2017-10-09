@@ -215,18 +215,25 @@ class CompilationEngine:
                 self._eat('(')
                 self.compileExpressionList()
                 self._eat(')')
-        elif self.tokenizer.currentToken == '{':
+        elif self.tokenizer.currentToken == '(':
             self._writeOpenCloseTags(True, 'term')
-            self._eat('{')
+            self._eat('(')
             self.compileExpression()
-            self._eat('}')
+            self._eat(')')
         else:
-            self._writeOpenCloseTags(True, 'term')
             try:
-                self._eat('INT_CONST', 'STRING_CONST', 'true', 'false', 'null', 'this', '~', '-')
+                self._writeOpenCloseTags(True, 'term')
+                self._eat('integerConstant', 'stringConstant', 'true', 'false', 'null', 'this')
             except:
-                self.compiledTags.pop()
-                raise Exception("Term not found")
+                exceptionFlag = False
+                try:
+                    self._eat('-', '~')
+                    self.compileTerm()
+                except:
+                    self.compiledTags.pop()
+                    exceptionFlag = True
+                if exceptionFlag:
+                    raise Exception("Term not found")
         self._writeOpenCloseTags(False, 'term')
 
     def compileExpressionList(self):
