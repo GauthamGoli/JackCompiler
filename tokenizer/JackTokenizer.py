@@ -8,7 +8,7 @@ class JackTokenizer:
         self.currentToken = None
         self.tokenType = None
         self.keywords = 'class|constructor|function|method|field|static|var|int|char|boolean|void|true|false|null|this|let|do|if|else|while|return'
-        self.symbols = '\{|\}|\(|\)|\[|\]|\.|,|;|\+|-|\*|/|&|<|>|~|=|~'
+        self.symbols = '\{|\}|\(|\)|\[|\]|\.|,|;|\+|-|\*|/|&|<|>|~|=|~|\|'
         self.lineIndex = 0
         self.currentLineSeekIndex = 0
         self.tokenMappings = { 'keyword': 'KEYWORD',
