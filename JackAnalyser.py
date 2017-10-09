@@ -1,8 +1,5 @@
 import os
 from tokenizer.JackTokenizer import JackTokenizer
-
-jt = JackTokenizer(os.path.abspath('./test.jack'))
-
-while jt.hasMoreTokens():
-    jt.advance()
-    print '{}:{}'.format(jt.currentToken, jt.tokenType)
+from CompilationEngine.CompilationEngine import CompilationEngine
+jt = JackTokenizer(os.path.abspath('/Users/gautham/Desktop/nand2tetris/projects/10/ExpressionLessSquare/Square.jack'))
+CompilationEngine(jt)

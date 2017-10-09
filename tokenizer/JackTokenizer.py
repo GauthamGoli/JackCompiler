@@ -5,6 +5,8 @@ class JackTokenizer:
         filePointer = open(filePath)
         self.lines = filePointer.readlines()
         self.stripComments()
+        self.currentToken = None
+        self.tokenType = None
         self.keywords = 'class|constructor|function|method|field|static|var|int|char|boolean|void|true|false|null|this|let|do|if|else|while|return'
         self.symbols = '\{|\}|\(|\)|\[|\]|\.|,|;|\+|-|\*|/|&|<|>|~|=|~'
         self.lineIndex = 0
@@ -31,37 +33,35 @@ class JackTokenizer:
             return True
 
     def advance(self):
-        lineComponents = self.lines[self.lineIndex][self.currentLineSeekIndex:].split()
-        for componentPosition, lineComponent in enumerate(lineComponents):
-            if self.regexSearchWrapper('^({})$'.format(self.keywords), lineComponent):
-                self.currentToken = lineComponent
-                self.tokenType = 'keyword'
-            elif self.regexSearchWrapper('^({})({})$'.format(self.keywords, self.symbols), lineComponent):
-                self.currentToken = self.match.group(0)
-                self.tokenType = 'keyword'
-            elif self.regexSearchWrapper('^\d{1,5}', lineComponent):
-                self.currentToken = self.match.group(0)
-                self.tokenType = 'integerConstant'
-            elif self.regexSearchWrapper('^({})'.format(self.symbols), lineComponent):
-                self.currentToken = self.match.group(0)
-                self.tokenType = 'symbol'
-            elif self.regexSearchWrapper('^"(.*)"', lineComponent):
-                self.currentToken = self.match.group(0)
-                self.tokenType = 'stringConstant'
-            elif self.regexSearchWrapper('^([^0-9][a-zA-Z0-9_]*)', lineComponent):
-                self.currentToken = self.match.group(0)
-                self.tokenType = 'identifier'
-            else:
-                raise Exception("No match found")
-            # Update seek Pos in current line
-            # Before that see if there is space adjacent to current token
-            adjacentSpace = 1 if len(self.currentToken) == len(lineComponent) else 0
-            self.currentLineSeekIndex += len(self.currentToken) + adjacentSpace
-            # Update current line index, if seek index reached end, then update line index
-            if self.currentLineSeekIndex >= len(self.lines[self.lineIndex]):
-                self.currentLineSeekIndex = 0
-                self.lineIndex += 1
-            return
+        if self.hasMoreTokens():
+            lineComponents = self.lines[self.lineIndex][self.currentLineSeekIndex:].split()
+            for componentPosition, lineComponent in enumerate(lineComponents):
+                if self.regexSearchWrapper('^({})'.format(self.keywords), lineComponent):
+                    self.currentToken = self.match.group(0)
+                    self.tokenType = 'keyword'
+                elif self.regexSearchWrapper('^\d{1,5}', lineComponent):
+                    self.currentToken = self.match.group(0)
+                    self.tokenType = 'integerConstant'
+                elif self.regexSearchWrapper('^({})'.format(self.symbols), lineComponent):
+                    self.currentToken = self.match.group(0)
+                    self.tokenType = 'symbol'
+                elif self.regexSearchWrapper('^"(.*)"', lineComponent):
+                    self.currentToken = self.match.group(0)
+                    self.tokenType = 'stringConstant'
+                elif self.regexSearchWrapper('^([^0-9][a-zA-Z0-9_]*)', lineComponent):
+                    self.currentToken = self.match.group(0)
+                    self.tokenType = 'identifier'
+                else:
+                    raise Exception("No match found")
+                # Update seek Pos in current line
+                # Before that see if there is space adjacent to current token
+                adjacentSpace = 1 if len(self.currentToken) == len(lineComponent) else 0
+                self.currentLineSeekIndex += len(self.currentToken) + adjacentSpace
+                # Update current line index, if seek index reached end, then update line index
+                if self.currentLineSeekIndex >= len(self.lines[self.lineIndex]):
+                    self.currentLineSeekIndex = 0
+                    self.lineIndex += 1
+                return
 
     def regexSearchWrapper(self, pattern, textToMatch):
         self.match = re.search(pattern, textToMatch)
