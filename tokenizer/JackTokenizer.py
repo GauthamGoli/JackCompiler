@@ -2,6 +2,7 @@ import re
 
 class JackTokenizer:
     def __init__(self, filePath):
+        self.inputPath = filePath
         filePointer = open(filePath)
         self.lines = filePointer.readlines()
         self.stripComments()

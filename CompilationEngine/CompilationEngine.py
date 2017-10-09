@@ -1,11 +1,13 @@
 class CompilationEngine:
 
-    def __init__(self, jackTokenizer):
+    def __init__(self, jackTokenizer, outputPath):
         self.tokenizer = jackTokenizer
         self.compiledTags = []
         self.tokenizer.advance()
         self.compileClass()
-        print '\n'.join(self.compiledTags)
+        fp = open(outputPath, 'w')
+        fp.write('\n'.join(self.compiledTags))
+        fp.close()
 
     def compileClass(self):
         self._eat('class', openingTag=True, tagName='class')
