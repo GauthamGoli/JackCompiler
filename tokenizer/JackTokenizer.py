@@ -21,9 +21,11 @@ class JackTokenizer:
     def stripComments(self):
         strippedLines = []
         for line in self.lines[:]:
-            try:
+            if '//' in line:
                 strippedLines.append(line[:line.index('//')].rstrip().lstrip())
-            except:
+            elif '/**' in line:
+                strippedLines.append(line[:line.index('/**')].rstrip().lstrip())
+            else:
                 strippedLines.append(line.strip())
         self.lines = [line for line in strippedLines if line]
 
@@ -35,7 +37,14 @@ class JackTokenizer:
 
     def advance(self):
         if self.hasMoreTokens():
-            lineComponents = self.lines[self.lineIndex][self.currentLineSeekIndex:].split()
+            # Split by space, but don't split strings with double quotes
+            if self.lines[self.lineIndex][self.currentLineSeekIndex] == '"':
+                stringEndPos = self.lines[self.lineIndex][self.currentLineSeekIndex+1:].index('"')+self.currentLineSeekIndex+2
+                lineComponents = [self.lines[self.lineIndex][self.currentLineSeekIndex: stringEndPos]]
+                lineComponents += self.lines[self.lineIndex][stringEndPos:].split()
+                self.currentLineSeekIndex -= 0 if self.lines[self.lineIndex][stringEndPos] == ' ' else 1
+            else:
+                lineComponents = self.lines[self.lineIndex][self.currentLineSeekIndex:].split()
             for componentPosition, lineComponent in enumerate(lineComponents):
                 if self.regexSearchWrapper('^({})'.format(self.keywords), lineComponent):
                     self.currentToken = self.match.group(0)
@@ -47,7 +56,7 @@ class JackTokenizer:
                     self.currentToken = self.match.group(0)
                     self.tokenType = 'symbol'
                 elif self.regexSearchWrapper('^"(.*)"', lineComponent):
-                    self.currentToken = self.match.group(0)
+                    self.currentToken = self.match.group(1)
                     self.tokenType = 'stringConstant'
                 elif self.regexSearchWrapper('^([^0-9][a-zA-Z0-9_]*)', lineComponent):
                     self.currentToken = self.match.group(0)
@@ -56,7 +65,12 @@ class JackTokenizer:
                     raise Exception("No match found")
                 # Update seek Pos in current line
                 # Before that see if there is space adjacent to current token
-                adjacentSpace = 1 if len(self.currentToken) == len(lineComponent) else 0
+                if len(self.currentToken) == len(lineComponent) and self.tokenType is not 'stringConstant':
+                    adjacentSpace = 1
+                elif len(self.currentToken) == len(lineComponent) - 2 and self.tokenType is 'stringConstant':
+                    adjacentSpace = 2+1
+                else:
+                    adjacentSpace = 0
                 self.currentLineSeekIndex += len(self.currentToken) + adjacentSpace
                 # Update current line index, if seek index reached end, then update line index
                 if self.currentLineSeekIndex >= len(self.lines[self.lineIndex]):
