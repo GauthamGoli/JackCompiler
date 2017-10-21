@@ -1,7 +1,9 @@
+
 class CompilationEngine:
 
-    def __init__(self, jackTokenizer, outputPath):
+    def __init__(self, jackTokenizer, symbolTable, outputPath):
         self.tokenizer = jackTokenizer
+        self.symbolTable = symbolTable
         self.compiledTags = []
         self.tokenizer.advance()
         self.compileClass()
@@ -11,6 +13,7 @@ class CompilationEngine:
 
     def compileClass(self):
         self._eat('class', openingTag=True, tagName='class')
+        self.symbolTable.setClassScope(self.tokenizer.currentToken)
         self._eat('identifier')
         self._eat('{')
         while True:
@@ -25,23 +28,34 @@ class CompilationEngine:
             except:
                 break
 
-        self._eat('}', openingTag = False, tagName = 'class')
+        self._eat('}', openingTag=False, tagName='class')
 
     def compileClassVarDec(self):
-        self._eat('static','field', openingTag = True, tagName = 'classVarDec')
-        self._eat('int','char','boolean','identifier')
-        self._eat('identifier')
+        kind = self.tokenizer.currentToken
+        self._eat('static', 'field', openingTag=True, tagName='classVarDec')
+        typeOf = self.tokenizer.currentToken
+        self._eat('int', 'char', 'boolean', 'identifier')
+        self._eat('identifier', kind=kind, typeOf=typeOf)
         while True:
             try:
                 self._eat(',')
-                self._eat('identifier')
+                self._eat('identifier', kind=kind, typeOf=typeOf)
             except:
                 break
-        self._eat(';', openingTag = False, tagName = 'classVarDec')
+        self._eat(';', openingTag=False, tagName='classVarDec')
 
     def compileSubroutineDec(self):
-        self._eat('constructor','function', 'method', openingTag = True, tagName = 'subroutineDec')
+        subRoutineType = self.tokenizer.currentToken in ['method', 'constructor']
+        self._eat('constructor', 'function', 'method', openingTag=True, tagName='subroutineDec')
         self._eat('void', 'int', 'char', 'boolean', 'identifier')
+        if subRoutineType:
+            self.symbolTable.setSubRoutineScope(self.tokenizer.currentToken)
+            self.symbolTable.startSubroutine()
+        else:
+            # Static method, hence set SubRoutineScope as None
+            # Static methods don't have the implicit 'this' argument
+            self.symbolTable.setSubRoutineScope(None)
+            self.symbolTable.startSubroutine()
         self._eat('identifier')
         self._eat('(')
         self.compileParameterList()
@@ -62,27 +76,32 @@ class CompilationEngine:
         self._writeOpenCloseTags(False, 'subroutineBody')
 
     def compileVarDec(self):
-        self._eat('var', openingTag = True, tagName = 'varDec')
+        kind = self.tokenizer.currentToken
+        self._eat('var', openingTag=True, tagName='varDec')
+        typeOf = self.tokenizer.currentToken
         self._eat('int', 'char', 'boolean', 'identifier')
-        self._eat('identifier')
+        self._eat('identifier', kind=kind, typeOf=typeOf)
         while True:
             try:
                 self._eat(',')
-                self._eat('identifier')
+                self._eat('identifier', kind=kind, typeOf=typeOf)
             except:
                 break
-        self._eat(';', openingTag = False, tagName = 'varDec')
+        self._eat(';', openingTag=False, tagName='varDec')
 
     def compileParameterList(self):
         try:
             self._writeOpenCloseTags(True, 'parameterList')
+            typeOf = self.tokenizer.currentToken
+            kind = 'arg'
             self._eat('int', 'char', 'boolean', 'identifier')
-            self._eat('identifier')
+            self._eat('identifier', typeOf=typeOf, kind=kind)
             while True:
                 try:
                     self._eat(',')
+                    typeOf = self.tokenizer.currentToken
                     self._eat('int', 'char', 'boolean', 'identifier')
-                    self._eat('identifier')
+                    self._eat('identifier', typeOf = typeOf, kind=kind)
                 except:
                     break
             self._writeOpenCloseTags(False, 'parameterList')
@@ -111,7 +130,7 @@ class CompilationEngine:
             self.compileReturn()
         else:
             raise Exception("Unknown Statement")
-            
+
     def compileIf(self):
         self._writeOpenCloseTags(True, 'ifStatement')
         self._eat('if')
@@ -258,7 +277,34 @@ class CompilationEngine:
             raise Exception("Token not found")
         else:
             self._writeOpenCloseTags(kwargs.get('openingTag', False), kwargs.get('tagName', None), True, False)
-            self.compiledTags.append('<{}>{}</{}>'.format(self.tokenizer.tokenType, self.tokenizer.currentToken, self.tokenizer.tokenType))
+            skipFlag = False
+            if kwargs.get('kind', False) and kwargs.get('typeOf', False):
+                self.symbolTable.define(self.tokenizer.currentToken, kwargs.get('typeOf'), kwargs.get('kind'))
+                self.compiledTags.append('<{}:{}:{}:def>{}</{}:{}:{}:def>'.format(self.tokenizer.tokenType,
+                                                                                self.symbolTable.kindOf(
+                                                                                    self.tokenizer.currentToken),
+                                                                                self.symbolTable.typeOf(
+                                                                                    self.tokenizer.currentToken),
+                                                                                self.tokenizer.currentToken,
+                                                                                self.tokenizer.tokenType,
+                                                                                self.symbolTable.kindOf(
+                                                                                    self.tokenizer.currentToken),
+                                                                                self.symbolTable.typeOf(
+                                                                                    self.tokenizer.currentToken)))
+                skipFlag = True
+            elif self.tokenizer.identifier() and self.symbolTable.hasSymbol(self.tokenizer.currentToken):
+                self.compiledTags.append('<{}:{}:{}:{}>{}</{}:{}:{}:{}>'.format(self.tokenizer.tokenType,
+                                                                          self.symbolTable.kindOf(self.tokenizer.currentToken),
+                                                                          self.symbolTable.typeOf(self.tokenizer.currentToken),
+                                                                          self.symbolTable.indexOf(self.tokenizer.currentToken),
+                                                                          self.tokenizer.currentToken,
+                                                                          self.tokenizer.tokenType,
+                                                                          self.symbolTable.kindOf(self.tokenizer.currentToken),
+                                                                          self.symbolTable.typeOf(self.tokenizer.currentToken),
+                                                                          self.symbolTable.indexOf(self.tokenizer.currentToken)))
+                skipFlag = True
+            if not skipFlag:
+                self.compiledTags.append('<{}>{}</{}>'.format(self.tokenizer.tokenType, self.tokenizer.currentToken, self.tokenizer.tokenType))
             self._writeOpenCloseTags(kwargs.get('openingTag', False), kwargs.get('tagName', None), False)
             self.tokenizer.advance()
 
