@@ -6,11 +6,20 @@ class CompilationEngine:
         self.symbolTable = symbolTable
         self.compiledTags = []
         self.compiledVMcode = []
+        self._labelIndex = 0
         self.tokenizer.advance()
         self.compileClass()
         fp = open(outputPath, 'w')
-        fp.write('\n'.join(self.compiledTags))
+        fp.write('\n'.join(self.compiledVMcode))
         fp.close()
+
+    def _incrementLabelIndex(self):
+        self._labelIndex += 1
+
+    def fetchUniqueLabel(self):
+        unique_label = 'label-{}'.format(self._labelIndex)
+        self._incrementLabelIndex()
+        return unique_label
 
     def compileClass(self):
         self._eat('class', openingTag=True, tagName='class')
@@ -46,10 +55,10 @@ class CompilationEngine:
         self._eat(';', openingTag=False, tagName='classVarDec')
 
     def compileSubroutineDec(self):
-        subRoutineType = self.tokenizer.currentToken in ['method', 'constructor']
-        self._eat('constructor', 'function', 'method', openingTag=True, tagName='subroutineDec')
-        self._eat('void', 'int', 'char', 'boolean', 'identifier')
-        if subRoutineType:
+        isMethod = self.tokenizer.currentToken in ['method']
+        subRoutineType = self._experimentalEat('constructor', 'function', 'method', openingTag=True, tagName='subroutineDec')
+        self.returnType = self._experimentalEat('void', 'int', 'char', 'boolean', 'identifier')
+        if isMethod:
             self.symbolTable.setSubRoutineScope(self.tokenizer.currentToken)
             self.symbolTable.startSubroutine()
         else:
@@ -57,12 +66,22 @@ class CompilationEngine:
             # Static methods don't have the implicit 'this' argument
             self.symbolTable.setSubRoutineScope(None)
             self.symbolTable.startSubroutine()
-        self._eat('identifier')
-        self._eat('(')
-        self.compileParameterList()
-        self._eat(')')
+
+        subRoutineName = self._experimentalEat('identifier')
+        self._experimentalEat('(')
+        args = self.compileParameterList()
+        self._experimentalEat(')')
+        # Insert function definition at the right place after determining the number of paramters
+        self.compiledVMcode.insert(len(self.compiledVMcode)-args, 'function {}.{} {}'.format(self.symbolTable.className, subRoutineName, args))
+        if subRoutineType == 'constructor':
+            # Allocate sufficient memory on heap
+            self.compiledVMcode.append('push {}'.format(len(self.symbolTable.subroutineLevel.keys())))
+            self.compiledVMcode.append('call Memory.alloc 1')
+            self.compiledVMcode.append('pop pointer 0')
+        elif subRoutineType == 'method':
+            self.compiledVMcode.append('push argument 0')
+            self.compiledVMcode.append('pop pointer 0')
         self.compileSubroutineBody()
-        self._writeOpenCloseTags(False, 'subroutineDec')
 
     def compileSubroutineBody(self):
         self._writeOpenCloseTags(True, 'subroutineBody')
@@ -91,23 +110,26 @@ class CompilationEngine:
         self._eat(';', openingTag=False, tagName='varDec')
 
     def compileParameterList(self):
+        count = 0
         try:
-            self._writeOpenCloseTags(True, 'parameterList')
             typeOf = self.tokenizer.currentToken
             kind = 'arg'
             self._eat('int', 'char', 'boolean', 'identifier')
             self._eat('identifier', typeOf=typeOf, kind=kind)
+            count += 1
             while True:
                 try:
                     self._eat(',')
                     typeOf = self.tokenizer.currentToken
                     self._eat('int', 'char', 'boolean', 'identifier')
                     self._eat('identifier', typeOf = typeOf, kind=kind)
+                    count += 1
                 except:
                     break
             self._writeOpenCloseTags(False, 'parameterList')
         except:
             self._writeOpenCloseTags(False, 'parameterList')
+        return count
 
     def compileStatements(self):
         self._writeOpenCloseTags(True, 'statements')
@@ -133,75 +155,93 @@ class CompilationEngine:
             raise Exception("Unknown Statement")
 
     def compileIf(self):
-        self._writeOpenCloseTags(True, 'ifStatement')
-        self._eat('if')
-        self._eat('(')
+        self._experimentalEat('if')
+        self._experimentalEat('(')
         self.compileExpression()
-        self._eat(')')
-        self._eat('{')
+        self._experimentalEat(')')
+        # Negate condition
+        self.compiledVMcode.append('not')
+        l1 = self.fetchUniqueLabel()
+        l2 = self.fetchUniqueLabel()
+        self._experimentalEat('{')
+        self.compiledVMcode.append('if-goto {}'.format(l1))
         self.compileStatements()
-        self._eat('}')
+        self._experimentalEat('}')
+        self.compiledVMcode.append('goto {}'.format(l2))
         try:
-            self._eat('else')
-            self._eat('{')
+            self.compiledVMcode.append('label {}'.format(l1))
+            self._experimentalEat('else')
+            self._experimentalEat('{')
             self.compileStatements()
-            self._eat('}')
+            self._experimentalEat('}')
+            self.compiledVMcode.append('label {}'.format(l2))
         except:
             pass
-        self._writeOpenCloseTags(False, 'ifStatement')
 
     def compileWhile(self):
-        self._writeOpenCloseTags(True, 'whileStatement')
-        self._eat('while')
-        self._eat('(')
+        self._experimentalEat('while')
+        self._experimentalEat('(')
+        l1 = self.fetchUniqueLabel()
+        l2 = self.fetchUniqueLabel()
+        self.compiledVMcode.append('label {}'.format(l1))
         self.compileExpression()
-        self._eat(')')
-        self._eat('{')
+        self._experimentalEat(')')
+        self.compiledVMcode.append('not')
+        self.compiledVMcode.append('if-goto {}'.format(l2))
+        self._experimentalEat('{')
         self.compileStatements()
-        self._eat('}')
-        self._writeOpenCloseTags(False, 'whileStatement')
+        self._experimentalEat('}')
+        self.compiledVMcode.append('goto {}'.format(l1))
+        self.compiledVMcode.append('label {}'.format(l2))
 
     def compileLet(self):
-        self._writeOpenCloseTags(True, 'letStatement')
-        self._eat('let')
-        self._eat('identifier')
-        try:
-            self._eat('[')
+        self._experimentalEat('let')
+        id1 = self._experimentalEat('identifier')
+        if self.tokenizer.currentToken == '[':
+            self._experimentalEat('[')
+            self.compiledVMcode.append('push {}'.format(id1))
             self.compileExpression()
-            self._eat(']')
-        except:
-            pass
-        self._eat('=')
-        self.compileExpression()
-        self._eat(';')
-        self._writeOpenCloseTags(False, 'letStatement')
+            self._experimentalEat(']')
+            self.compiledVMcode.append('add')
+            self._experimentalEat('=')
+            self.compileExpression()
+            self.compiledVMcode.append('pop temp 0')
+            self.compiledVMcode.append('pop pointer 1')
+            self.compiledVMcode.append('push temp 0')
+            self.compiledVMcode.append('pop that 0')
+        else:
+            self._experimentalEat('=')
+            self.compileExpression()
+            self.compiledVMcode.append('pop {} {}'.format(self.symbolTable.kindOf(id1), self.symbolTable.indexOf(id1)))
+        self._experimentalEat(';')
 
     def compileDo(self):
-        self._writeOpenCloseTags(True, 'doStatement')
-        self._eat('do')
-        self._eat('identifier')
+        self._experimentalEat('do')
+        id1 = self._experimentalEat('identifier')
         if self.tokenizer.currentToken == '(':
-            self._eat('(')
-            self.compileExpressionList()
-            self._eat(')')
+            self._experimentalEat('(')
+            args = self.compileExpressionList()
+            self._experimentalEat(')')
+            self.compiledVMcode.append('call {} {}'.format(id1, args))
         elif self.tokenizer.currentToken == '.':
-            self._eat('.')
-            self._eat('identifier')
-            self._eat('(')
-            self.compileExpressionList()
-            self._eat(')')
-        self._eat(';')
-        self._writeOpenCloseTags(False, 'doStatement')
+            self._experimentalEat('.')
+            id2 = self._experimentalEat('identifier')
+            self._experimentalEat('(')
+            args = self.compileExpressionList()
+            self._experimentalEat(')')
+            self.compiledVMcode.append('call {}.{} {}'.format(id1, id2, args))
+        self.compiledVMcode.append('pop temp 0')
+        self._experimentalEat(';')
 
     def compileReturn(self):
-        self._writeOpenCloseTags(True, 'returnStatement')
-        self._eat('return')
+        if self.returnType == 'void':
+            self.compiledVMcode.append('push const 0')
         try:
             self.compileExpression()
         except:
             pass
-        self._eat(';')
-        self._writeOpenCloseTags(False, 'returnStatement')
+        self.compiledVMcode.append(self._experimentalEat('return'))
+        self._experimentalEat(';')
 
     # def codeWrite(self):
     #     if self.tokenizer.tokenType == 'integerConstant':
@@ -224,13 +264,15 @@ class CompilationEngine:
 
 
     def compileExpression(self):
+        opMap = {'+': 'add', '-': 'sub', '*': 'call Math.multiply 2', '/': 'call Math.divide 2', '<': 'lt',
+                 '>': 'gt', '=': 'eq'}
         try:
             self.compileTerm()
             while True:
                 try:
                     op1 = self._experimentalEat('+', '-', '*', '/', '&', '|', '<', '>', '=')
                     self.compileTerm()
-                    self.compiledVMcode.append('{}'.format(op1))
+                    self.compiledVMcode.append('{}'.format(opMap[op1] if op1 in opMap else op1))
                 except:
                     break
         except:
@@ -265,8 +307,8 @@ class CompilationEngine:
             self._experimentalEat(')')
         else:
             try:
-                const1 = self._experimentalEat('integerConstant' )#, 'stringConstant', 'true', 'false', 'null', 'this')
-                self.compiledVMcode.append('push {}'.format(const1))
+                const1 = self._experimentalEat('integerConstant')#, 'stringConstant', 'true', 'false', 'null', 'this')
+                self.compiledVMcode.append('push constant {}'.format(const1))
             except:
                 exceptionFlag = False
                 try:
@@ -280,16 +322,20 @@ class CompilationEngine:
                     raise Exception("Term not found")
 
     def compileExpressionList(self):
+        count = 0
         try:
             self.compileExpression()
+            count += 1
             while True:
                 try:
                     self._experimentalEat(',')
                     self.compileExpression()
+                    count += 1
                 except:
                     break
         except:
             pass
+        return count
 
     def _experimentalEat(self, *token, **kwargs):
         if self.tokenizer.currentToken not in token and self.tokenizer.tokenType not in token:

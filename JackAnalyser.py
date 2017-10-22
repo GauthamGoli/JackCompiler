@@ -14,5 +14,5 @@ else:
     for jack_file in jack_files:
         st = SymbolTable()
         jt = JackTokenizer(os.path.abspath(jack_file))
-        CompilationEngine(jt, st, jt.inputPath.replace('.jack', '_output.xml'))
+        CompilationEngine(jt, st, jt.inputPath.replace('.jack', '_output.vm'))
         print '{} compiled successfully'.format(jack_file)
