@@ -5,6 +5,7 @@ class CompilationEngine:
         self.tokenizer = jackTokenizer
         self.symbolTable = symbolTable
         self.compiledTags = []
+        self.compiledVMcode = []
         self.tokenizer.advance()
         self.compileClass()
         fp = open(outputPath, 'w')
@@ -202,72 +203,101 @@ class CompilationEngine:
         self._eat(';')
         self._writeOpenCloseTags(False, 'returnStatement')
 
+    # def codeWrite(self):
+    #     if self.tokenizer.tokenType == 'integerConstant':
+    #         self.compiledVMcode.append('push {}'.format(self.tokenizer.currentToken))
+    #         self.tokenizer.advance()
+    #     elif self.tokenizer.tokenType == 'identifier':
+    #         self.compiledVMcode.append('push {}'.format(self.tokenizer.currentToken))
+    #         self.tokenizer.advance()
+    #
+    #     elif self.tokenizer.currentToken == '(':
+    #         # Assume it is (expression1) op (expression2)
+    #         self.codeWrite()
+    #
+    #     elif self.tokenizer.tokenType == 'symbol' and self.tokenizer.currentToken in ['+', '-', '*', '/', '&', '|', '<', '>', '=']:
+    #     # Assume it is (op expression)
+    #         op = self.tokenizer.currentToken
+    #         self.codeWrite()
+    #         self.compiledVMcode.append('{}'.format(op))
+    #     elif
+
+
     def compileExpression(self):
         try:
-            self._writeOpenCloseTags(True, 'expression')
             self.compileTerm()
             while True:
                 try:
-                    self._eat('+', '-', '*', '/', '&', '|', '<', '>', '=')
+                    op1 = self._experimentalEat('+', '-', '*', '/', '&', '|', '<', '>', '=')
                     self.compileTerm()
+                    self.compiledVMcode.append('{}'.format(op1))
                 except:
                     break
-            self._writeOpenCloseTags(False, 'expression')
         except:
             self.compiledTags.pop()
 
     def compileTerm(self):
         if self.tokenizer.tokenType == 'identifier':
-            self._writeOpenCloseTags(True, 'term')
-            self._eat('identifier')
-            if self.tokenizer.currentToken == '{':
-               self._eat('{')
-               self.compileExpressionList()
-               self._eat('}')
+            id1 = self._experimentalEat('identifier')
+            if self.tokenizer.currentToken == '(':
+                # Changed from curly to normal, Possible bug introduced
+                # f(exp1, exp2, ..)
+                self._experimentalEat('(')
+                self.compileExpressionList()
+                self._experimentalEat(')')
+                self.compiledVMcode.append('call {}'.format(id1))
             elif self.tokenizer.currentToken == '[':
                 self._eat('[')
                 self.compileExpression()
                 self._eat(']')
             elif self.tokenizer.currentToken == '.':
-                self._eat('.')
-                self._eat('identifier')
-                self._eat('(')
+                self._experimentalEat('.')
+                id2 = self._experimentalEat('identifier')
+                self._experimentalEat('(')
                 self.compileExpressionList()
-                self._eat(')')
+                self._experimentalEat(')')
+                self.compiledVMcode.append('call {}.{}'.format(id1, id2))
+            else:
+                self.compiledVMcode.append('push {}'.format(id1))
         elif self.tokenizer.currentToken == '(':
-            self._writeOpenCloseTags(True, 'term')
-            self._eat('(')
+            self._experimentalEat('(')
             self.compileExpression()
-            self._eat(')')
+            self._experimentalEat(')')
         else:
             try:
-                self._writeOpenCloseTags(True, 'term')
-                self._eat('integerConstant', 'stringConstant', 'true', 'false', 'null', 'this')
+                const1 = self._experimentalEat('integerConstant' )#, 'stringConstant', 'true', 'false', 'null', 'this')
+                self.compiledVMcode.append('push {}'.format(const1))
             except:
                 exceptionFlag = False
                 try:
-                    self._eat('-', '~')
+                    op1 = self._experimentalEat('-', '~')
                     self.compileTerm()
+                    self.compiledVMcode.append('{}'.format(op1))
                 except:
                     self.compiledTags.pop()
                     exceptionFlag = True
                 if exceptionFlag:
                     raise Exception("Term not found")
-        self._writeOpenCloseTags(False, 'term')
 
     def compileExpressionList(self):
-        self._writeOpenCloseTags(True, 'expressionList')
         try:
             self.compileExpression()
             while True:
                 try:
-                    self._eat(',')
+                    self._experimentalEat(',')
                     self.compileExpression()
                 except:
                     break
         except:
             pass
-        self._writeOpenCloseTags(False, 'expressionList')
+
+    def _experimentalEat(self, *token, **kwargs):
+        if self.tokenizer.currentToken not in token and self.tokenizer.tokenType not in token:
+            raise Exception("Token not found")
+        else:
+            to_return = self.tokenizer.currentToken
+            self.tokenizer.advance()
+            return to_return
 
     def _eat(self, *token, **kwargs):
         if len(token) == 0:
