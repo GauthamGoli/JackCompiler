@@ -72,7 +72,8 @@ class CompilationEngine:
         args = self.compileParameterList()
         self._experimentalEat(')')
         # Insert function definition at the right place after determining the number of paramters
-        self.compiledVMcode.insert(len(self.compiledVMcode)-args, 'function {}.{} {}'.format(self.symbolTable.className, subRoutineName, args))
+        #self.compiledVMcode.insert(len(self.compiledVMcode)-args, 'function {}.{} {}'.format(self.symbolTable.className, subRoutineName, args))
+        self.compiledVMcode.append('function {}.{} {}'.format(self.symbolTable.className, subRoutineName, args))
         if subRoutineType == 'constructor':
             # Allocate sufficient memory on heap
             self.compiledVMcode.append('push {}'.format(len(self.symbolTable.subroutineLevel.keys())))
@@ -236,11 +237,11 @@ class CompilationEngine:
     def compileReturn(self):
         if self.returnType == 'void':
             self.compiledVMcode.append('push const 0')
-        try:
+            self._experimentalEat('return')
+        else:
+            self._experimentalEat('return')
             self.compileExpression()
-        except:
-            pass
-        self.compiledVMcode.append(self._experimentalEat('return'))
+        self.compiledVMcode.append('return')
         self._experimentalEat(';')
 
     # def codeWrite(self):
@@ -265,7 +266,7 @@ class CompilationEngine:
 
     def compileExpression(self):
         opMap = {'+': 'add', '-': 'sub', '*': 'call Math.multiply 2', '/': 'call Math.divide 2', '<': 'lt',
-                 '>': 'gt', '=': 'eq'}
+                 '>': 'gt', '=': 'eq', '&': 'and', '|': 'or'}
         try:
             self.compileTerm()
             while True:
@@ -285,9 +286,9 @@ class CompilationEngine:
                 # Changed from curly to normal, Possible bug introduced
                 # f(exp1, exp2, ..)
                 self._experimentalEat('(')
-                self.compileExpressionList()
+                args = self.compileExpressionList()
                 self._experimentalEat(')')
-                self.compiledVMcode.append('call {}'.format(id1))
+                self.compiledVMcode.append('call {} {}'.format(id1, args))
             elif self.tokenizer.currentToken == '[':
                 self._eat('[')
                 self.compileExpression()
@@ -296,30 +297,29 @@ class CompilationEngine:
                 self._experimentalEat('.')
                 id2 = self._experimentalEat('identifier')
                 self._experimentalEat('(')
-                self.compileExpressionList()
+                args = self.compileExpressionList()
                 self._experimentalEat(')')
-                self.compiledVMcode.append('call {}.{}'.format(id1, id2))
+                self.compiledVMcode.append('call {}.{} {}'.format(id1, id2, args))
             else:
-                self.compiledVMcode.append('push {}'.format(id1))
+                self.compiledVMcode.append('push {} {}'.format(self.symbolTable.kindOf(id1), self.symbolTable.indexOf(id1)))
         elif self.tokenizer.currentToken == '(':
             self._experimentalEat('(')
             self.compileExpression()
             self._experimentalEat(')')
         else:
-            try:
-                const1 = self._experimentalEat('integerConstant')#, 'stringConstant', 'true', 'false', 'null', 'this')
+            if self.tokenizer.tokenType == 'integerConstant':
+                const1 = self._experimentalEat('integerConstant')#, 'true', 'false', 'null')#, 'stringConstant', 'true', 'false', 'null', 'this')
                 self.compiledVMcode.append('push constant {}'.format(const1))
-            except:
-                exceptionFlag = False
-                try:
-                    op1 = self._experimentalEat('-', '~')
-                    self.compileTerm()
-                    self.compiledVMcode.append('{}'.format(op1))
-                except:
-                    self.compiledTags.pop()
-                    exceptionFlag = True
-                if exceptionFlag:
-                    raise Exception("Term not found")
+            elif self.tokenizer.currentToken == 'true':
+                self._experimentalEat('true')
+                self.compiledVMcode += ['push constant 1', 'neg']
+            elif self.tokenizer.currentToken == 'false' or self.tokenizer.currentToken == 'null':
+                self._eat('false', 'null')
+                self.compiledVMcode.append('push constant 0')
+            else:
+                op1 = self._experimentalEat('-', '~')
+                self.compileTerm()
+                self.compiledVMcode.append('{}'.format('neg' if op1 == '~' else 'not'))
 
     def compileExpressionList(self):
         count = 0
