@@ -1,6 +1,10 @@
 class SymbolTable:
 
     def __init__(self):
+        self.kindOfMappings = {'field': 'this',
+                               'static': 'static',
+                               'arg': 'argument',
+                               'var': 'local'}
         self.subroutineLevel = {}
         self.subroutineLevelIndex = {}
         self.classLevel  = {}
@@ -48,9 +52,9 @@ class SymbolTable:
 
     def kindOf(self, name):
         if self.classLevel.has_key(name):
-            return self.classLevel[name][1]
+            return self.kindOfMappings[self.classLevel[name][1]]
         elif self.subroutineLevel.has_key(name):
-            return self.subroutineLevel[name][1]
+            return self.kindOfMappings[self.subroutineLevel[name][1]]
         else:
             return "NONE"
 
