@@ -200,7 +200,7 @@ class CompilationEngine:
         id1 = self._experimentalEat('identifier')
         if self.tokenizer.currentToken == '[':
             self._experimentalEat('[')
-            self.compiledVMcode.append('push {}'.format(id1))
+            self.compiledVMcode.append('push {} {}'.format(self.symbolTable.kindOf(id1), self.symbolTable.indexOf(id1)))
             self.compileExpression()
             self._experimentalEat(']')
             self.compiledVMcode.append('add')
@@ -290,8 +290,12 @@ class CompilationEngine:
                 self._experimentalEat(')')
                 self.compiledVMcode.append('call {} {}'.format(id1, args))
             elif self.tokenizer.currentToken == '[':
+                self.compiledVMcode.append('push {} {}'.format(self.symbolTable.kindOf(id1), self.symbolTable.indexOf(id1)))
                 self._eat('[')
                 self.compileExpression()
+                self.compiledVMcode.append('add')
+                self.compiledVMcode.append('pop pointer 1')
+                self.compiledVMcode.append('push that 0')
                 self._eat(']')
             elif self.tokenizer.currentToken == '.':
                 self._experimentalEat('.')
@@ -319,6 +323,13 @@ class CompilationEngine:
             elif self.tokenizer.currentToken == 'this':
                 self._eat('this')
                 self.compiledVMcode.append('push pointer 0')
+            elif self.tokenizer.tokenType == 'stringConstant':
+                str_const = self._experimentalEat('stringConstant')
+                self.compiledVMcode.append('push constant {}'.format(len(str_const)))
+                self.compiledVMcode.append('call String.new 1')
+                for letter in str_const:
+                    self.compiledVMcode.append('push const {}'.format(ord(letter)))
+                    self.compiledVMcode.append('call String.append 1')
             else:
                 op1 = self._experimentalEat('-', '~')
                 self.compileTerm()
