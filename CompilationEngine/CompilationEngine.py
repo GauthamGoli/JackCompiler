@@ -85,7 +85,6 @@ class CompilationEngine:
         self.compileSubroutineBody()
 
     def compileSubroutineBody(self):
-        self._writeOpenCloseTags(True, 'subroutineBody')
         self._eat('{')
         while True:
             try:
@@ -94,7 +93,6 @@ class CompilationEngine:
                 break
         self.compileStatements()
         self._eat('}')
-        self._writeOpenCloseTags(False, 'subroutineBody')
 
     def compileVarDec(self):
         kind = self.tokenizer.currentToken
@@ -127,19 +125,16 @@ class CompilationEngine:
                     count += 1
                 except:
                     break
-            self._writeOpenCloseTags(False, 'parameterList')
         except:
-            self._writeOpenCloseTags(False, 'parameterList')
+            pass
         return count
 
     def compileStatements(self):
-        self._writeOpenCloseTags(True, 'statements')
         while True:
             try:
                 self.compileStatement()
             except:
                 break
-        self._writeOpenCloseTags(False, 'statements')
 
     def compileStatement(self):
         if self.tokenizer.currentToken == 'if':
@@ -361,45 +356,10 @@ class CompilationEngine:
 
     def _eat(self, *token, **kwargs):
         if len(token) == 0:
-            self._writeOpenCloseTags(kwargs.get('openingTag'), kwargs.get('tagName'))
             return
         elif self.tokenizer.currentToken not in token and self.tokenizer.tokenType not in token:
             raise Exception("Token not found")
         else:
-            self._writeOpenCloseTags(kwargs.get('openingTag', False), kwargs.get('tagName', None), True, False)
-            skipFlag = False
             if kwargs.get('kind', False) and kwargs.get('typeOf', False):
                 self.symbolTable.define(self.tokenizer.currentToken, kwargs.get('typeOf'), kwargs.get('kind'))
-                self.compiledTags.append('<{}:{}:{}:def>{}</{}:{}:{}:def>'.format(self.tokenizer.tokenType,
-                                                                                self.symbolTable.kindOf(
-                                                                                    self.tokenizer.currentToken),
-                                                                                self.symbolTable.typeOf(
-                                                                                    self.tokenizer.currentToken),
-                                                                                self.tokenizer.currentToken,
-                                                                                self.tokenizer.tokenType,
-                                                                                self.symbolTable.kindOf(
-                                                                                    self.tokenizer.currentToken),
-                                                                                self.symbolTable.typeOf(
-                                                                                    self.tokenizer.currentToken)))
-                skipFlag = True
-            elif self.tokenizer.identifier() and self.symbolTable.hasSymbol(self.tokenizer.currentToken):
-                self.compiledTags.append('<{}:{}:{}:{}>{}</{}:{}:{}:{}>'.format(self.tokenizer.tokenType,
-                                                                          self.symbolTable.kindOf(self.tokenizer.currentToken),
-                                                                          self.symbolTable.typeOf(self.tokenizer.currentToken),
-                                                                          self.symbolTable.indexOf(self.tokenizer.currentToken),
-                                                                          self.tokenizer.currentToken,
-                                                                          self.tokenizer.tokenType,
-                                                                          self.symbolTable.kindOf(self.tokenizer.currentToken),
-                                                                          self.symbolTable.typeOf(self.tokenizer.currentToken),
-                                                                          self.symbolTable.indexOf(self.tokenizer.currentToken)))
-                skipFlag = True
-            if not skipFlag:
-                self.compiledTags.append('<{}>{}</{}>'.format(self.tokenizer.tokenType, self.tokenizer.currentToken, self.tokenizer.tokenType))
-            self._writeOpenCloseTags(kwargs.get('openingTag', False), kwargs.get('tagName', None), False)
             self.tokenizer.advance()
-
-    def _writeOpenCloseTags(self, openingTag = False, tagName = None, opening=True, closing=True):
-        if openingTag and tagName and opening:
-            self.compiledTags.append('<{}>'.format(tagName))
-        if (not openingTag) and tagName and closing:
-            self.compiledTags.append('</{}>'.format(tagName))
