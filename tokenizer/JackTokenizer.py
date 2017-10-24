@@ -45,6 +45,9 @@ class JackTokenizer:
                 self.currentLineSeekIndex -= 0 if self.lines[self.lineIndex][stringEndPos] == ' ' else 1
             else:
                 lineComponents = self.lines[self.lineIndex][self.currentLineSeekIndex:].split()
+                # Fix wierd bug where spaces are incorrectly calculated
+                if self.lines[self.lineIndex][self.currentLineSeekIndex] == ' ':
+                    self.currentLineSeekIndex += 1
             for componentPosition, lineComponent in enumerate(lineComponents):
                 if self.regexSearchWrapper('^({})'.format(self.keywords), lineComponent):
                     self.currentToken = self.match.group(0)

@@ -69,14 +69,14 @@ class CompilationEngine:
 
         subRoutineName = self._experimentalEat('identifier')
         self._experimentalEat('(')
-        args = self.compileParameterList()
+        args = self.compileParameterList() + (1 if isMethod else 0)
         self._experimentalEat(')')
         # Insert function definition at the right place after determining the number of paramters
         #self.compiledVMcode.insert(len(self.compiledVMcode)-args, 'function {}.{} {}'.format(self.symbolTable.className, subRoutineName, args))
         self.compiledVMcode.append('function {}.{} {}'.format(self.symbolTable.className, subRoutineName, args))
         if subRoutineType == 'constructor':
             # Allocate sufficient memory on heap
-            self.compiledVMcode.append('push {}'.format(len(self.symbolTable.subroutineLevel.keys())))
+            self.compiledVMcode.append('push constant {}'.format(len(self.symbolTable.subroutineLevel.keys())))
             self.compiledVMcode.append('call Memory.alloc 1')
             self.compiledVMcode.append('pop pointer 0')
         elif subRoutineType == 'method':
@@ -277,7 +277,7 @@ class CompilationEngine:
                 except:
                     break
         except:
-            self.compiledTags.pop()
+            raise Exception("No expression found")
 
     def compileTerm(self):
         if self.tokenizer.tokenType == 'identifier':
@@ -316,6 +316,9 @@ class CompilationEngine:
             elif self.tokenizer.currentToken == 'false' or self.tokenizer.currentToken == 'null':
                 self._eat('false', 'null')
                 self.compiledVMcode.append('push constant 0')
+            elif self.tokenizer.currentToken == 'this':
+                self._eat('this')
+                self.compiledVMcode.append('push pointer 0')
             else:
                 op1 = self._experimentalEat('-', '~')
                 self.compileTerm()
