@@ -49,8 +49,8 @@ class JackTokenizer:
                 if self.lines[self.lineIndex][self.currentLineSeekIndex] == ' ':
                     self.currentLineSeekIndex += 1
             for componentPosition, lineComponent in enumerate(lineComponents):
-                if self.regexSearchWrapper('^({})'.format(self.keywords), lineComponent):
-                    self.currentToken = self.match.group(0)
+                if self.regexSearchWrapper('^({})({})?$'.format(self.keywords, self.symbols), lineComponent):
+                    self.currentToken = self.match.group(1)
                     self.tokenType = 'keyword'
                 elif self.regexSearchWrapper('^\d{1,5}', lineComponent):
                     self.currentToken = self.match.group(0)
