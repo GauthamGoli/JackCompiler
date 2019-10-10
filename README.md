@@ -5,8 +5,10 @@ Consists:
   - Tokenizer: Tokenizes the high level HACK language, which becomes the input for Parser
   - Parser: Recursive Descent primarily of LL(1) but LL(2) for few cases
   - SymbolTable: Handles class level and subroutine level variables
-  - Compilation Engine and VMWriter: Recursive top-down compilation engine (VMWriter was supposed to be in a separate class but I got restless)
+  - Compilation Engine and VMWriter: Recursive top-down compilation engine
 
+### Contributing
+Feel free to make any improvements and open a PR
 
 ### Usage:
 `$ python JackAnalyser.py [filename.jack/Directory]`
